@@ -75,7 +75,7 @@ Once all methods have finished, results are written to the log file and the top 
 ```
 cracker.py              entry point, CLI, orchestration
 methods/
-  base_encodings.py     Base16 through Base91 and numeric variants
+  base_encodings.py     Base16 through Base92 and numeric variants
   rot_caesar.py         ROT1-25, ROT47, ROT5
   classic_ciphers.py    Vigenere, Affine, Atbash, Beaufort, Playfair
   transposition.py      Rail Fence, columnar, reversal
