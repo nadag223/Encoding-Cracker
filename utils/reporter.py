@@ -56,7 +56,7 @@ def print_summary(results: list, output_path: str, show_all: bool = False):
 
     print()
     print(_c(Fore.CYAN if HAS_COLOR else '', "TOP RESULTS:"))
-    print("━" * 52)
+    print("=" * 52)
 
     for i, r in enumerate(display, 1):
         score = r['score']
@@ -64,17 +64,17 @@ def print_summary(results: list, output_path: str, show_all: bool = False):
         result_str = str(r['result'])[:40].replace('\n', ' ')
 
         if score >= 80:
-            icon = _c(Fore.GREEN if HAS_COLOR else '', "✅")
-            score_str = _c(Fore.GREEN if HAS_COLOR else '', f"{score:3d}/100")
+            icon = "[OK]"
+            score_str = f"{score:3d}/100"
         elif score >= 50:
-            icon = _c(Fore.YELLOW if HAS_COLOR else '', "⚠")
-            score_str = _c(Fore.YELLOW if HAS_COLOR else '', f"{score:3d}/100")
+            icon = "[!?]"
+            score_str = f"{score:3d}/100"
         else:
             icon = " "
             score_str = f"{score:3d}/100"
 
-        print(f" #{i:<2} [{score_str}] {method} → {result_str}  {icon}")
+        print(f" #{i:<2} [{score_str}] {method} -> {result_str}  {icon}")
 
-    print("━" * 52)
-    print(_c(Fore.GREEN if HAS_COLOR else '', f"[✓] Full log saved → {output_path}"))
-    print(f"[✓] Saved {len(results)} attempts to {os.path.basename(output_path)}")
+    print("=" * 52)
+    print(f"[+] Full log saved: {output_path}")
+    print(f"[+] Saved {len(results)} attempts to {os.path.basename(output_path)}")
