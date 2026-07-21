@@ -298,8 +298,12 @@ def morse_decode(text: str) -> str:
 
 
 def brainfuck_decode(text: str) -> str:
-    """Simple Brainfuck interpreter"""
+    """Simple Brainfuck interpreter with timeout to prevent infinite loops"""
     try:
+        # Timeout: max iterations to prevent infinite loops
+        MAX_ITERATIONS = 100000
+        iteration = 0
+
         tape = [0] * 30000
         ptr = 0
         output = []
@@ -317,12 +321,17 @@ def brainfuck_decode(text: str) -> str:
                     bracket_map[i] = start
 
         i = 0
-        while i < len(text):
+        while i < len(text) and iteration < MAX_ITERATIONS:
+            iteration += 1
             cmd = text[i]
             if cmd == '>':
                 ptr += 1
+                if ptr >= len(tape):
+                    ptr = 0  # Wrap around or clamp? Clamp for safety
             elif cmd == '<':
                 ptr -= 1
+                if ptr < 0:
+                    ptr = 0  # Clamp to avoid negative index
             elif cmd == '+':
                 tape[ptr] = (tape[ptr] + 1) % 256
             elif cmd == '-':
@@ -332,10 +341,19 @@ def brainfuck_decode(text: str) -> str:
             elif cmd == ',':
                 pass  # Input not supported
             elif cmd == '[' and tape[ptr] == 0:
-                i = bracket_map[i]
+                if i in bracket_map:
+                    i = bracket_map[i]
+                else:
+                    break  # Unmatched bracket, exit
             elif cmd == ']' and tape[ptr] != 0:
-                i = bracket_map[i]
+                if i in bracket_map:
+                    i = bracket_map[i]
+                else:
+                    break  # Unmatched bracket, exit
             i += 1
+
+        if iteration >= MAX_ITERATIONS:
+            return None  # Timeout reached, likely infinite loop
 
         return ''.join(output)
     except Exception:

@@ -34,6 +34,13 @@ def test_valid_multilabel_domain_matches():
     assert detector.is_valid_domain("goramli.bsmch.idf.il") is True
 
 
+def test_https_scheme_matches():
+    """The domain detector must recognize https:// URLs as valid domains."""
+    assert detector.is_valid_domain("https://google.com") is True
+    assert detector.is_valid_domain("https://goramli.bsmch.idf.il") is True
+    assert detector.is_valid_domain("https://en.wikipedia.org/wiki/Jack_London") is True
+
+
 def test_google_com_matches():
     assert detector.is_valid_domain("google.com") is True
     assert detector.get_structural_signals("google.com")["strong_structural_match"] == 1.0

@@ -30,6 +30,35 @@ try:
 except ImportError:
     HAS_COLOR = False
 
+
+class _Spinner:
+    """Simple spinner for when tqdm is not available."""
+    def __init__(self, desc="", total=100):
+        self.desc = desc
+        self.total = total
+        self.spinner = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏']
+        self.idx = 0
+        self.count = 0
+        self.last_update = 0
+
+    def update(self, n=1):
+        self.count += n
+        self.idx = (self.idx + 1) % len(self.spinner)
+        # Only update every 100ms to avoid flooding the terminal
+        import time
+        now = time.time()
+        if now - self.last_update > 0.1:
+            self.last_update = now
+            percent = (self.count / self.total) * 100 if self.total > 0 else 0
+            print(f"\r{_c(Fore.CYAN, self.desc)} {_c(Fore.YELLOW, self.spinner[self.idx])} {_c(Fore.GREEN, f'{self.count}/{self.total}')} ({percent:.1f}%) methods", end="", flush=True)
+
+    def set_description(self, desc):
+        self.desc = desc
+        self.last_update = 0  # force update
+
+    def close(self):
+        print("\r" + " " * 80 + "\r", end="", flush=True)
+
 def _c(code, text):
     return (code + text + Style.RESET_ALL) if HAS_COLOR else text
 
@@ -276,13 +305,16 @@ def list_methods():
 
 def run_pipeline(text: str, methods: list, max_depth: int = MAX_PIPELINE_DEPTH,
                   seen: set = None, attempt_count: int = 0, parallel: bool = True,
-                  depth: int = 1) -> list[dict]:
+                  depth: int = 1, progress_bar=None) -> list[dict]:
     """Run the multi-layer decoding pipeline with deduplication and budget control.
 
     ``depth`` is the 1-based count of decode layers applied so far to reach the
     current ``text`` (1 = the first layer on the raw input). It is forwarded to
     the scorer so each result knows its own pipeline depth for the depth-decay
     penalty: depth 1 incurs no penalty, each additional layer multiplies by 0.85.
+
+    ``progress_bar``: if provided, a tqdm progress bar that will be updated with
+    the current method count and layer depth.
     """
     if seen is None:
         seen = set()
@@ -311,6 +343,10 @@ def run_pipeline(text: str, methods: list, max_depth: int = MAX_PIPELINE_DEPTH,
 
     # Process regular methods (thread depth into the scorer)
     for name, method_type, method_info in regular_methods:
+        if progress_bar:
+            progress_bar.set_description(_c(Fore.CYAN, f"Layer {depth} | Running Methods"))
+            progress_bar.update(1)
+
         if method_type == "simple":
             r = run_method(name, method_info, text, depth)
         else:
@@ -331,6 +367,8 @@ def run_pipeline(text: str, methods: list, max_depth: int = MAX_PIPELINE_DEPTH,
             ]
             parallel_results = pool.map(run_method_parallel, args_list)
             for r in parallel_results:
+                if progress_bar:
+                    progress_bar.update(1)
                 if r:
                     results.append(r)
                     attempt_count += 1
@@ -339,6 +377,8 @@ def run_pipeline(text: str, methods: list, max_depth: int = MAX_PIPELINE_DEPTH,
     elif expensive_methods and attempt_count < MAX_TOTAL_ATTEMPTS:
         # Sequential fallback if parallel disabled
         for name, method_type, method_params in expensive_methods:
+            if progress_bar:
+                progress_bar.update(1)
             r = run_method_parallel((name, method_type, method_params, text, depth))
             if r:
                 results.append(r)
@@ -367,7 +407,7 @@ def run_pipeline(text: str, methods: list, max_depth: int = MAX_PIPELINE_DEPTH,
                 # nested layer is one deeper, so it scores with depth + 1.
                 nested_results = run_pipeline(
                     result_str, methods, max_depth - 1, seen, attempt_count,
-                    parallel, depth=depth + 1
+                    parallel, depth=depth + 1, progress_bar=progress_bar,
                 )
                 # Add method chain to nested results
                 for nr in nested_results:
@@ -417,8 +457,26 @@ def main():
     else:
         print(_c(Fore.YELLOW if HAS_COLOR else '', "[*] Parallel processing disabled"))
 
+    # Progress bar setup
+    if HAS_TQDM:
+        progress_bar = tqdm(
+            total=len(methods) * args.max_depth,  # Total methods * max depth
+            desc=_c(Fore.CYAN, f"Layer {1}"),
+            unit="method",
+            dynamic_ncols=True,  # Auto-resize to terminal width
+            bar_format=_c(Fore.GREEN, '{l_bar}{bar}| ') + _c(Fore.YELLOW, '{n_fmt}/{total_fmt} [{elapsed}<{remaining}, {rate_fmt}{postfix}]'),
+            leave=True,  # Keep progress bar visible after completion
+        )
+    else:
+        progress_bar = _Spinner(desc=_c(Fore.CYAN, f"Layer {1}"), total=len(methods) * args.max_depth)
+
     # Run pipeline
-    results = run_pipeline(text, methods, max_depth=args.max_depth, parallel=not args.no_parallel)
+    results = run_pipeline(
+        text, methods, max_depth=args.max_depth, parallel=not args.no_parallel,
+        progress_bar=progress_bar,
+    )
+    if progress_bar:
+        progress_bar.close()
 
     # Save to file
     ts = datetime.now().strftime('%Y%m%d_%H%M%S')
