@@ -1,7 +1,173 @@
-"""Auto-detects the most likely encoding of the input string with structural fingerprinting."""
+"""Auto-detects the most likely encoding of the input string with structural fingerprinting.
+
+This module exposes two public surfaces:
+
+  * ``detect(text)``        — returns a list of human-readable heuristic hints (used by
+                             the CLI for the ``[*] Auto-detected:`` lines).
+  * ``get_structural_signals(text)`` — returns a normalized dict of *binary structural
+                             signals* (each 0.0 or 1.0) consumed by the confidence
+                             scorer. Only genuinely valid structures set a flag; loose
+                             substring checks never set ``strong_structural_match``.
+
+The scorer treats ``strong_structural_match`` as a dominant signal (it short-circuits
+to a high base score), so these detectors must be precise — a false positive here
+would inflate gibberish results, which is exactly the bug this rework fixes.
+"""
 import re
 import string
 import base64
+
+# ── TLD list ─────────────────────────────────────────────────────────────────
+# A reasonably complete but bounded list of top-level domains relevant to CTF
+# contexts: common gTLDs and the ccTLDs that show up in real flag/footer material.
+# This is deliberately NOT exhaustive (the real root has ~1500 TLDs); it just
+# needs common ones plus country codes seen in likely CTF contexts.
+_TLDS = [
+    # generic
+    'com', 'org', 'net', 'io', 'co', 'gov', 'edu', 'mil', 'int', 'info', 'biz',
+    'name', 'pro', 'dev', 'app', 'xyz', 'tech', 'online', 'site', 'cloud', 'run',
+    'ai', 'me', 'cc', 'tv', 'club', 'top', 'store', 'shop', 'news', 'blog', 'zone',
+    'page', 'live', 'world', 'systems', 'security',
+    # country codes
+    'il', 'us', 'uk', 'de', 'fr', 'ru', 'cn', 'jp', 'kr', 'in', 'br', 'ca', 'au',
+    'it', 'es', 'nl', 'se', 'no', 'fi', 'dk', 'pl', 'cz', 'be', 'ch', 'at', 'tr',
+    'gr', 'pt', 'ie', 'mx', 'ar', 'za', 'eg', 'sa', 'ae', 'ir', 'hk', 'tw', 'sg',
+    'my', 'th', 'id', 'vn', 'nz', 'ua', 'ro', 'hu', 'sk', 'si', 'hr', 'lt', 'lv',
+    'ee', 'bg', 'rs', 'ph', 'pk', 'bd', 'ng', 'ke',
+]
+_TLD_ALTERNATION = '|'.join(sorted(set(_TLDS), key=len, reverse=True))
+
+# A full valid domain: one-or-more dot-separated labels (letters/digits/hyphens,
+# not starting or ending in a hyphen, max 63 chars each) followed by a known TLD.
+# Anchored: the *whole* candidate must BE a valid domain (modulo stray whitespace
+# and a leading scheme), not merely contain a dot. This is what stops gibberish
+# like "WT.MH#F(L]B7KI+N2?1^NF4II" — whose "WT.MH" looks dot-ish — from matching:
+# "MH#F(L]B7KI+N2?1^NF4II" is not a valid label and there is no valid TLD.
+DOMAIN_PATTERN = re.compile(
+    r'^\s*'                                     # optional leading whitespace
+    r'(?:[a-zA-Z][a-zA-Z0-9+.-]*://)?'          # optional scheme http:// https:// etc.
+    r'(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)+'
+    r'(?:' + _TLD_ALTERNATION + r')'            # known TLD (no trailing dot)
+    r'(?:/[^\s]*)?'                             # optional path
+    r'\s*$',
+    re.IGNORECASE,
+)
+
+# JWT: three base64url segments separated by dots (header.payload.signature).
+# Each segment must be non-empty base64url; we do not require valid JSON to keep
+# the check structural + cheap, but we do require all three segments present.
+_JWT_PATTERN = re.compile(
+    r'^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$'
+)
+
+# PEM block: -----BEGIN <TYPE>----- ... -----END <TYPE>-----
+_PEM_PATTERN = re.compile(
+    r'^-----BEGIN [A-Z0-9 ]+-----[\s\S]*-----END [A-Z0-9 ]+-----$'
+)
+
+# Magic-byte fingerprints, matched against raw text chars. These are intentionally
+# narrow (exact magic prefixes) so they cannot fire on lookalike gibberish.
+_MAGIC_PATTERNS = [
+    ('png',    lambda t: t.startswith('\x89PNG\r\n\x1a\n')),
+    ('jpg',    lambda t: t.startswith('\xff\xd8\xff')),
+    ('zip',    lambda t: t.startswith('PK\x03\x04')),
+    ('pdf',    lambda t: t.startswith('%PDF')),
+    ('elf',    lambda t: t.startswith('\x7fELF')),
+    ('gzip',   lambda t: t.startswith('\x1f\x8b')),
+    ('bzip2',  lambda t: t.startswith('BZh')),
+    ('zlib',   lambda t: len(t) >= 2 and t[0] == 'x' and t[1] in ('\x01', '\x5e', '\x9c', '\xda')),
+]
+
+
+def _count_valid_domain_labels(candidate: str) -> int:
+    """Return how many labels are in ``candidate`` if it's a bare domain, else 0."""
+    m = re.match(
+        r'(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)+(?:' + _TLD_ALTERNATION + r')$',
+        candidate, re.IGNORECASE,
+    )
+    if not m:
+        return 0
+    return candidate.count('.') + 1
+
+
+def is_valid_domain(text: str) -> bool:
+    """True iff ``text`` is (whitespace-trimmed, optional scheme/path) a valid domain
+    whose final label is a known TLD and whose other labels are valid host labels.
+
+    Regression anchors:
+        ``goramli.bsmch.idf.il``       -> True   (multi-label, valid .il TLD)
+        ``google.com``                 -> True
+        ``WT.MH#F(L]B7KI+N2?1^NF4II``  -> False  (invalid labels, no valid TLD)
+        ``xu.ni``                      -> False  (``ni`` not in TLD list; ``wt.mh``
+                                                 would be rejected the same way)
+    """
+    return DOMAIN_PATTERN.match(text.strip()) is not None
+
+
+def _looks_like_jwt(text: str) -> bool:
+    """True iff ``text`` has the exact three-segment JWT shape.
+
+    We deliberately do NOT decode the segments here (the scorer is hot; decoding
+    is the decoder's job). The shape check is enough to flag a strong structural
+    match, and a three-base64url-segment string is vanishingly unlikely to arise
+    by accident from a noise decode.
+    """
+    t = text.strip()
+    if not _JWT_PATTERN.match(t):
+        return False
+    # Each segment must look like base64url (it would otherwise match any 'a.b.c').
+    seg_len_ok = all(len(seg) >= 2 for seg in t.split('.'))
+    return seg_len_ok
+
+
+def _looks_like_pem(text: str) -> bool:
+    return bool(_PEM_PATTERN.match(text.strip()))
+
+
+def _looks_like_magic(text: str) -> bool:
+    return any(check(text) for _, check in _MAGIC_PATTERNS)
+
+
+def get_structural_signals(text: str) -> dict:
+    """Return a dict of normalized *binary* structural signals (0.0/1.0) for a
+    decoded candidate.
+
+    Signals:
+        strong_structural_match: 1.0 if the candidate is a *genuinely valid* domain,
+            JWT, PEM block, or known magic-bytes format. This is the scorer's
+            dominant signal — setting it on gibberish is the bug we fixed, so every
+            check here is anchored, not loose. 0.0 otherwise.
+        valid_domain:     1.0 if a valid domain (subset of strong match, exposed for
+            notes/telemetry).
+        valid_jwt:        1.0 if a JWT shape.
+        valid_pem:        1.0 if a PEM block.
+        valid_magic:      1.0 if a recognized magic-bytes prefix.
+
+    All values are floats in {0.0, 1.0}; the scorer can treat them uniformly.
+    """
+    if not text:
+        return {k: 0.0 for k in (
+            'strong_structural_match', 'valid_domain', 'valid_jwt',
+            'valid_pem', 'valid_magic',
+        )}
+
+    t = text.strip()
+    valid_domain = 1.0 if is_valid_domain(t) else 0.0
+    valid_jwt = 1.0 if _looks_like_jwt(t) else 0.0
+    valid_pem = 1.0 if _looks_like_pem(t) else 0.0
+    valid_magic = 1.0 if _looks_like_magic(t) else 0.0
+
+    strong = 1.0 if (valid_domain or valid_jwt or valid_pem or valid_magic) else 0.0
+    return {
+        'strong_structural_match': strong,
+        'valid_domain': valid_domain,
+        'valid_jwt': valid_jwt,
+        'valid_pem': valid_pem,
+        'valid_magic': valid_magic,
+    }
+
+
+# ── Hint detection (CLI-facing, separate from structural signals) ────────────
 
 def detect(text: str) -> list[str]:
     """Return list of human-readable hints about what the input might be."""
@@ -69,47 +235,19 @@ def detect(text: str) -> list[str]:
     if all(c in b85_chars for c in clean) and len(clean) > 0 and len(clean) % 5 == 0:
         hints.append("possible Base85 (RFC1924/Ascii85)")
 
-    # --- Structural Fingerprinting ---
-
-    # JWT (JSON Web Token)
-    if re.fullmatch(r'[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+', t):
+    # --- Structural Fingerprinting (mirrors get_structural_signals) ---
+    signals = get_structural_signals(t)
+    if signals['valid_domain']:
+        hints.append("valid domain structure (labels + known TLD)")
+    if signals['valid_jwt']:
         hints.append("JWT structure (header.payload.signature)")
-
-    # PEM format
-    if t.startswith('-----BEGIN ') and t.endswith('-----'):
+    if signals['valid_pem']:
         hints.append("PEM/DER format (certificate/key)")
-
-    # Zlib/Gzip/Bzip2 magic bytes
-    if len(t) >= 2:
-        # Zlib: 0x78 0x9C or 0x78 0xDA
-        if t.startswith('x\x9c') or t.startswith('x\xda'):
-            hints.append("Zlib compressed data (magic bytes)")
-        # Gzip: 0x1F 0x8B
-        if t.startswith('\x1f\x8b'):
-            hints.append("Gzip compressed data (magic bytes)")
-        # Bzip2: 'BZh'
-        if t.startswith('BZh'):
-            hints.append("Bzip2 compressed data (magic bytes)")
-
-    # PNG magic bytes
-    if len(t) >= 8 and t.startswith('\x89PNG\r\n\x1a\n'):
-        hints.append("PNG image (magic bytes)")
-
-    # JPG magic bytes
-    if len(t) >= 3 and t.startswith('\xff\xd8\xff'):
-        hints.append("JPEG image (magic bytes)")
-
-    # ZIP magic bytes
-    if len(t) >= 4 and t.startswith('PK\x03\x04'):
-        hints.append("ZIP archive (magic bytes)")
-
-    # PDF magic bytes
-    if len(t) >= 4 and t.startswith('%PDF'):
-        hints.append("PDF document (magic bytes)")
-
-    # ELF magic bytes
-    if len(t) >= 4 and t.startswith('\x7fELF'):
-        hints.append("ELF executable (magic bytes)")
+    if signals['valid_magic']:
+        for name, check in _MAGIC_PATTERNS:
+            if check(t):
+                hints.append(f"{name.upper()} data (magic bytes)")
+                break
 
     # --- Content-based hints ---
 
@@ -165,14 +303,14 @@ def detect(text: str) -> list[str]:
     if len(hints) > 1:
         # If multiple hints, prioritize based on confidence
         priority_hints = []
-        if "JWT structure" in hints:
+        if signals['valid_jwt']:
             priority_hints.append("JWT structure (high confidence)")
-        if "PEM/DER format" in hints:
+        if signals['valid_pem']:
             priority_hints.append("PEM/DER format (high confidence)")
-        if "Zlib compressed data" in hints or "Gzip compressed data" in hints or "Bzip2 compressed data" in hints:
-            priority_hints.append("Compressed data (high confidence)")
-        if "PNG image" in hints or "JPEG image" in hints or "ZIP archive" in hints or "PDF document" in hints:
+        if signals['valid_magic']:
             priority_hints.append("Binary file format (high confidence)")
+        if signals['valid_domain']:
+            priority_hints.append("valid domain structure (high confidence)")
         if priority_hints:
             return priority_hints
 

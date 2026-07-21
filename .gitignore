@@ -79,6 +79,15 @@ __pycache__/
 results/
 *.log
 *.txt
+# Keep bundled language resources tracked (the *.txt rule above would
+# otherwise ignore them). corpus_en.txt is the source the Markov model is
+# trained from; running_key_sources.txt backs the Running Key cipher.
+!wordlists/corpus_en.txt
+!wordlists/running_key_sources.txt
+
+# The trained Markov model is a derived artifact (built from corpus_en.txt on
+# first use). Regenerate locally with: python -c "from utils.markov_language import build_and_save; build_and_save()"
+wordlists/markov_model.json
 
 # Virtual environment
 .venv/

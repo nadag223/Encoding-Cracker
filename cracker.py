@@ -78,13 +78,18 @@ def load_methods(only: list | None = None) -> list:
             print(f"[!] Failed loading category '{key}': {e}")
     return all_methods
 
-def run_method(name: str, fn, text: str) -> dict | None:
-    """Execute one method; return result dict or None."""
+def run_method(name: str, fn, text: str, pipeline_depth: int = 1) -> dict | None:
+    """Execute one method; return result dict or None.
+
+    ``pipeline_depth`` (1 = single layer) is forwarded to the scorer so deeper
+    decode chains get the depth-decay penalty. The scorer uses a normalized
+    weighted model; see ``utils/scorer.py``.
+    """
     try:
         result = fn(text)
         if result is None:
             return None
-        s, notes = scorer.score(text, str(result))
+        s, notes = scorer.score(text, str(result), pipeline_depth)
         if s == -99:
             return None
         return {'method': name, 'result': result, 'score': s, 'notes': notes}
@@ -97,12 +102,29 @@ def run_method(name: str, fn, text: str) -> dict | None:
         }
 
 def run_method_parallel(args: tuple) -> dict | None:
-    """Wrapper for parallel execution that avoids pickling issues by using method names and parameters."""
-    name, method_type, method_params, text = args
+    """Worker for parallel execution; avoids pickling by using method
+    names/parameters instead of bound functions.
+
+    ``args`` is ``(name, method_type, method_params, text)`` or, with depth
+    threading, ``(name, method_type, method_params, text, pipeline_depth)``.
+    All methods are routed through ``scorer.score`` with the correct pipeline
+    depth so the scoring model applies uniformly in parallel and sequential
+    paths. (Previously this branch called undefined ``score_result`` /
+    ``generate_notes`` helpers, which silently zeroed every parallel classic-
+    cipher result.)
+    """
+    if len(args) == 5:
+        name, method_type, method_params, text, pipeline_depth = args
+    else:
+        name, method_type, method_params, text = args
+        pipeline_depth = 1
 
     try:
-        # Dynamically import and call the method based on type and parameters
-        if method_type == "vigenere":
+        if method_type == "simple":
+            # Simple (name, fn) method dispatched in the parallel pool.
+            fn = method_params
+            result = fn(text)
+        elif method_type == "vigenere":
             from methods.classic_ciphers import _vigenere
             result = _vigenere(text, method_params, decrypt=True)
         elif method_type == "beaufort":
@@ -171,15 +193,14 @@ def run_method_parallel(args: tuple) -> dict | None:
             from methods.xor_methods import ror_bits
             result = ror_bits(text, method_params)
         else:
-            # For non-classic cipher methods, try to call directly
-            return run_method(name, method_params, text)
+            return run_method(name, method_params, text, pipeline_depth)
 
-        return {
-            'method': name,
-            'result': result,
-            'score': score_result(result),
-            'notes': generate_notes(text, result)
-        }
+        if result is None:
+            return None
+        s, notes = scorer.score(text, str(result), pipeline_depth)
+        if s == -99:
+            return None
+        return {'method': name, 'result': result, 'score': s, 'notes': notes}
     except Exception as e:
         return {
             'method': name,
@@ -254,8 +275,15 @@ def list_methods():
 # ── Multi-layer decoding pipeline ────────────────────────────────────────────
 
 def run_pipeline(text: str, methods: list, max_depth: int = MAX_PIPELINE_DEPTH,
-                  seen: set = None, attempt_count: int = 0, parallel: bool = True) -> list[dict]:
-    """Run multi-layer decoding pipeline with deduplication and budget control."""
+                  seen: set = None, attempt_count: int = 0, parallel: bool = True,
+                  depth: int = 1) -> list[dict]:
+    """Run the multi-layer decoding pipeline with deduplication and budget control.
+
+    ``depth`` is the 1-based count of decode layers applied so far to reach the
+    current ``text`` (1 = the first layer on the raw input). It is forwarded to
+    the scorer so each result knows its own pipeline depth for the depth-decay
+    penalty: depth 1 incurs no penalty, each additional layer multiplies by 0.85.
+    """
     if seen is None:
         seen = set()
     if attempt_count >= MAX_TOTAL_ATTEMPTS:
@@ -281,13 +309,12 @@ def run_pipeline(text: str, methods: list, max_depth: int = MAX_PIPELINE_DEPTH,
             name, method_type, method_params = method_info
             expensive_methods.append((name, method_type, method_params))
 
-    # Process regular methods
+    # Process regular methods (thread depth into the scorer)
     for name, method_type, method_info in regular_methods:
         if method_type == "simple":
-            r = run_method(name, method_info, text)
+            r = run_method(name, method_info, text, depth)
         else:
-            # For classic ciphers, create a temporary function
-            r = run_method_parallel((name, method_type, method_info, text))
+            r = run_method_parallel((name, method_type, method_info, text, depth))
 
         if r:
             results.append(r)
@@ -298,7 +325,10 @@ def run_pipeline(text: str, methods: list, max_depth: int = MAX_PIPELINE_DEPTH,
     # Process expensive methods in parallel if enabled
     if expensive_methods and attempt_count < MAX_TOTAL_ATTEMPTS and parallel:
         with multiprocessing.Pool(min(multiprocessing.cpu_count(), len(expensive_methods))) as pool:
-            args_list = [(name, method_type, method_params, text) for name, method_type, method_params in expensive_methods]
+            args_list = [
+                (name, method_type, method_params, text, depth)
+                for name, method_type, method_params in expensive_methods
+            ]
             parallel_results = pool.map(run_method_parallel, args_list)
             for r in parallel_results:
                 if r:
@@ -309,7 +339,7 @@ def run_pipeline(text: str, methods: list, max_depth: int = MAX_PIPELINE_DEPTH,
     elif expensive_methods and attempt_count < MAX_TOTAL_ATTEMPTS:
         # Sequential fallback if parallel disabled
         for name, method_type, method_params in expensive_methods:
-            r = run_method_parallel((name, method_type, method_params, text))
+            r = run_method_parallel((name, method_type, method_params, text, depth))
             if r:
                 results.append(r)
                 attempt_count += 1
@@ -333,9 +363,11 @@ def run_pipeline(text: str, methods: list, max_depth: int = MAX_PIPELINE_DEPTH,
             result_str = str(r['result'])
             if result_str not in seen:
                 seen.add(result_str)
-                # Recursively run pipeline on this result
+                # Recursively run pipeline on this intermediate result. The
+                # nested layer is one deeper, so it scores with depth + 1.
                 nested_results = run_pipeline(
-                    result_str, methods, max_depth - 1, seen, attempt_count, parallel
+                    result_str, methods, max_depth - 1, seen, attempt_count,
+                    parallel, depth=depth + 1
                 )
                 # Add method chain to nested results
                 for nr in nested_results:

@@ -1,0 +1,206 @@
+the quick brown fox jumps over the lazy dog
+pack my box with five dozen liquor jugs
+sphinx of black quartz judge my vow
+how vexingly quick daft zebras jump
+the five boxing wizards jump quickly
+lorem ipsum dolor sit amet consectetur adipiscing elit
+to be or not to be that is the question
+it was the best of times it was the worst of times
+all the world is a stage and all the men and women merely players
+the only thing we have to fear is fear itself
+ask not what your country can do for you ask what you can do for your country
+i have a dream that one day this nation will rise up
+four score and seven years ago our fathers brought forth
+we the people of the united states in order to form a more perfect union
+alice in wonderland was beginning to get very tired of sitting
+how much wood would a woodchuck chuck if a woodchuck could chuck wood
+peter piper picked a peck of pickled peppers
+she sells sea shells by the sea shore
+in the beginning was the word and the word was made flesh
+the journey of a thousand miles begins with a single step
+knowledge is power and information is the key to success
+the quick mind solves puzzles faster than the slow one
+security through obscurity is not security at all
+a cipher is only as strong as its weakest link
+encrypt the message before sending it over the network
+the hash function produces a fixed length digest
+public key cryptography uses a pair of keys for encryption
+symmetric encryption uses the same key for encryption and decryption
+the password must be long and random to resist brute force attacks
+salt is added to the password before hashing to prevent rainbow table attacks
+never roll your own crypto in production systems
+the flag was hidden inside a comment in the source code
+this challenge requires knowledge of base encoding and xor
+convert the hex string to bytes before decoding
+the message was encoded three times with different methods
+decoding nested encodings requires patience and a good tool
+the treasure map led them to the old oak tree
+science is the pursuit of truth through evidence and reason
+the library is a quiet place to read and study books
+programming languages each have their own strengths and weaknesses
+the internet connects billions of devices around the globe
+a computer program is a set of instructions for a machine
+regular expressions are powerful tools for matching text patterns
+algorithms are step by step procedures for solving problems
+data structures organize information for efficient access
+the database stores records in tables and indexes them for fast lookup
+machine learning models are trained on large datasets
+neural networks are inspired by the human brain
+statistics is the science of learning from data
+probability theory describes the likelihood of events
+mathematics is the language in which the universe is written
+physics seeks to understand the fundamental laws of nature
+chemistry studies the properties and reactions of matter
+biology explores the diversity of living organisms
+geology examines the structure and history of the earth
+astronomy investigates celestial objects and phenomena
+music is the art of arranging sounds in time
+literature preserves the stories and ideas of humanity
+history teaches us about the past to guide the future
+philosophy asks deep questions about existence and knowledge
+art expresses human creativity and emotion
+architecture balances function and beauty in buildings
+engineering applies science to design and build solutions
+medicine diagnoses treats and prevents disease
+the weather changes with the seasons and the winds
+rain falls from clouds and nourishes the earth below
+the sun rises in the east and sets in the west
+waves crash against the rocky shore with a steady rhythm
+the forest is full of birds and insects and tall green trees
+mountains rise above the valleys covered in mist and snow
+rivers flow down from the hills to the open sea
+the city never sleeps and its lights shine all night long
+a small town has a main street a post office and a diner
+children laugh and play in the park on a sunny afternoon
+the old man told stories of his youth to anyone who would listen
+friends gather around the table to share a meal and stories
+the chef prepared a feast of fresh fish and local vegetables
+the farmer rose before dawn to tend the crops and feed the animals
+a good book transports the reader to another world and time
+the musician practiced the piano until the notes flowed like water
+the artist painted the sunset in shades of orange and pink
+the detective examined the scene for clues and gathered evidence
+the scientist recorded the results of the experiment carefully
+the engineer tested the bridge with heavy loads before opening it
+the teacher inspired students to ask questions and seek answers
+the doctor reassured the patient and explained the treatment plan
+the lawyer argued the case with clear logic and solid evidence
+the pilot guided the plane through turbulent skies to a safe landing
+the sailor navigated by the stars across the open ocean
+the soldier stood watch through the long quiet night
+the explorer mapped the unknown territory with care and courage
+the inventor built a machine that could turn wheels with steam
+the writer drafted the chapter late into the night
+the programmer debugged the code until every test passed
+the chef seasoned the soup with salt pepper and fresh herbs
+the astronomer discovered a new star in the distant sky
+the historian studied ancient manuscripts to understand the era
+the philosopher pondered the meaning of life and consciousness
+the economist analyzed the market trends and predicted growth
+the psychologist studied how people think and behave under stress
+the biologist examined cells under a powerful microscope
+the chemist combined two elements to form a new compound
+the physicist calculated the trajectory of the moving particle
+the mathematician proved the theorem after years of work
+the geologist collected rock samples from the canyon walls
+the meteorologist forecast rain for the weekend ahead
+the oceanographer studied the currents that circle the globe
+the environmentalist warned about the effects of pollution
+conservation efforts protect endangered species from extinction
+the garden bloomed with roses tulips daisies and lavender
+a gentle breeze carried the scent of flowers through the open window
+the clock on the wall ticked steadily marking the passing hours
+the ancient temple stood at the edge of the quiet green valley
+patience is a virtue that grows stronger with practice
+hard work and dedication lead to mastery over time
+honesty builds trust between people in any relationship
+kindness costs nothing but means everything to the recipient
+courage is not the absence of fear but action despite it
+wisdom comes from experience and reflection on past mistakes
+hope sustains people through the darkest and most difficult times
+friendship is a treasure that enriches the lives of both people
+freedom is a fundamental right worth defending for all people
+justice is the foundation of a fair and peaceful society
+innovation drives progress and improves the human condition
+collaboration combines the strengths of many into one effort
+communication resolves misunderstandings and builds cooperation
+respect for others creates harmony in diverse communities
+responsibility means owning your actions and their consequences
+the sun warmed the field and the crops grew tall and strong
+a river carved the canyon over millions of patient years
+eagles soared above the peaks searching the valley below
+the harvest was plentiful and the village celebrated together
+astronauts prepared for the long journey into orbit and beyond
+robots assembled the parts on the factory floor with precision
+the satellite relayed signals back to earth from deep space
+a laser beam reflected off the mirror onto the distant target
+the submarine descended into the dark and silent depths
+divers explored the ancient shipwreck resting on the seabed
+the volcano erupted sending ash and lava high into the air
+earthquakes shake the ground when tectonic plates shift suddenly
+the glacier slowly carved a path through the solid mountain rock
+geysers shoot hot water high into the cold mountain air
+coral reefs teem with colorful fish and strange sea creatures
+the jungle hummed with the sound of insects and distant birds
+deserts stretch far and wide under the hot and blinding sun
+tundra plains remain frozen for most of the long cold year
+forests absorb carbon dioxide and release oxygen into the air
+oceans cover most of the surface of our blue and fragile planet
+the atmosphere protects life from harmful radiation above us
+a wise person listens before speaking and thinks before acting
+happiness grows when shared with others who are close to us
+the early bird catches the worm but the second mouse gets the cheese
+look before you leap and think before you make a big decision
+slow and steady wins the race against a fast but careless rival
+when in rome do as the romans do and respect the local customs
+an apple a day keeps the doctor away or so the saying goes
+time heals all wounds but some leave deeper scars than others
+the pen is mightier than the sword in the hands of a skilled writer
+birds of a feather flock together and share a common destination
+actions speak louder than words especially when words are cheap
+beauty is in the eye of the beholder and tastes vary between people
+every cloud has a silver lining if you look hard enough to see it
+necessity is the mother of invention and problems drive new solutions
+the bigger they are the harder they fall when the ground gives way
+you cannot judge a book by its cover but you can still try anyway
+the grass is always greener on the other side of the high fence
+practice makes perfect and repetition builds strong reliable habits
+the truth will set you free but first it will make you uncomfortable
+a picture is worth a thousand words when words fail to convey meaning
+where there is smoke there is fire and rarely one without the other
+two heads are better than one when facing a hard and complex problem
+apple music system network server client protocol message packet request response header body payload token session cookie query output buffer stream thread process kernel driver module library package framework template schema column index trigger cursor console terminal editor compiler linker assembler debugger profiler monitor scheduler dispatcher cache registry heap stack queue tree graph node leaf branch root trunk vertex edge weight layer filter signal noise sample rate amplitude frequency phase cycle loop array list tuple vector matrix scalar tensor sequence order group set mapping pair entry record field flag hover send pull open store list view sql json yaml xml html css fonts events render state proxy route guard phase lock rail node sync pushed merged staged build test deploy push fetch clone fork rel branch commit release beta alpha main head tip base diff patch crud trace span metric probe lexer parser grader runner worker proxy inject resolve bind route assign yield await sort map reduce filter fold scan zip split join parse emit sink source origin target offset limit snap page token grant scope roles perms user group member account profile store item cart order invoice bill pay cost price quote plan tier trial month year week hour minute second pause ready fail ok done warn info debug fatal error status health ping pong alive idle busy load cpu ram disk io net bytes band latency drop crate scope queued pending fresh expire renew valid stale check fetch fetch pull push sync reset flush clean clear prune wipe audit log rotate dump backup restore snapshot clone remote local cache index kvs ring out bind pure eval scala rust golang kotlin swift java perl groovy cobol fortran pascal ada elixir erlang scheme lisp prolog bash awk sed grep sort uniq head tail cut tr diff patch make cmake ninja bazel docker pod swarm kube vault nomad swarm terra ansible puppet chef jenkins gh gl git svn hg bzr ssh ssl tls pem crt key csr ovpn sftp ftp http ws tcp udp icmp raw ip dns dhcp arp nat vlan vx lan vpn tun tap ssl pfs hs mtu mtu mtu sync pool replica shard raft route mesh nodes edges
+welcome to the competition please find the flag hidden in the data
+the encoding scheme wraps the payload in a layer of obscurity
+rotate the alphabet and the hidden message will reveal itself
+the integer value maps to a character in the ascii table
+each byte of the hash depends on all bytes of the message
+the primitive root of the field generates the cyclic group
+ modular exponentiation is fast with repeated squaring
+the polynomial ring over a finite field supports division with remainder
+elliptic curves offer smaller keys for the same security level
+the block cipher turns a fixed block of bits into a pseudorandom stream
+the stream cipher xors a keystream with the plaintext to hide the content
+the hash tree verifies data integrity across large distributed datasets
+the salt must be unique per record to defeat precomputation of tables
+the nonce must never repeat under the same key or the stream breaks
+the key schedule expands the short key into many round subkeys
+the s box provides the nonlinear confusion that resists linear attacks
+the permutation layer provides the diffusion that resists statistical attacks
+the round key is added at the start and the end of every round
+ authenticated encryption ties the ciphertext to the context of the message
+the padding scheme prevents the recovery of the plaintext length
+the mac confirms the source and the integrity of the message at once
+the signature binds the message to the identity of the signer
+the certificate attests that the public key belongs to the named subject
+the revocation list marks certificates that are no longer trusted
+the trust anchor is the root that anchors the whole chain of trust
+the handshake establishes a shared secret between two parties over an open channel
+the forward secrecy ensures past sessions stay secret even if a key leaks later
+the zero knowledge proof convinces the verifier without revealing the secret
+the commitment scheme binds the sender to a value while keeping it hidden
+the secret sharing scheme splits the key into shares held by distinct parties
+the threshold of shares reconstructs the secret while fewer reveal nothing
+the oblivious transfer lets the receiver choose one of two items in secret
+the mixing step of the lattice problem hides the short vector in noise
+the random oracle model idealizes the hash as a truly random function

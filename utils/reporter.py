@@ -1,5 +1,6 @@
 """Handles writing the full results log to TXT and printing the terminal summary."""
 import os
+import sys
 from datetime import datetime
 
 try:
@@ -14,6 +15,25 @@ def _c(color_code, text):
     if HAS_COLOR:
         return color_code + text + Style.RESET_ALL
     return text
+
+def _safe_for_console(text: str) -> str:
+    """Return ``text`` safely encodable to the active stdout encoding.
+
+    On Windows the default console codec (e.g. cp1255) cannot represent many
+    characters that appear in method names (Unicode arrows) or decoded results
+    (e.g. high bytes from a noisy decode). Printing those verbatim raised
+    UnicodeEncodeError and took the whole summary down. Sanitizing per-print is
+    safer than reconfiguring stdout because reconfiguration can still fail
+    silently and leave half a line printed.
+    """
+    if text is None:
+        return ''
+    enc = getattr(sys.stdout, 'encoding', None) or 'utf-8'
+    try:
+        text.encode(enc)
+        return text
+    except (UnicodeEncodeError, LookupError):
+        return text.encode(enc, errors='replace').decode(enc, errors='replace')
 
 def save_results(results: list, original: str, output_path: str):
     """Write all results sorted by score to a TXT file."""
@@ -60,21 +80,22 @@ def print_summary(results: list, output_path: str, show_all: bool = False):
 
     for i, r in enumerate(display, 1):
         score = r['score']
-        method = r['method'][:20].ljust(20)
-        result_str = str(r['result'])[:40].replace('\n', ' ')
+        method = _safe_for_console(r['method'][:20].ljust(20))
+        result_str = _safe_for_console(str(r['result'])[:40].replace('\n', ' '))
 
+        # score is a float in [0,100]; render with one decimal, width 5.
         if score >= 80:
             icon = "[OK]"
-            score_str = f"{score:3d}/100"
+            score_str = f"{score:5.1f}/100"
         elif score >= 50:
             icon = "[!?]"
-            score_str = f"{score:3d}/100"
+            score_str = f"{score:5.1f}/100"
         else:
             icon = " "
-            score_str = f"{score:3d}/100"
+            score_str = f"{score:5.1f}/100"
 
         print(f" #{i:<2} [{score_str}] {method} -> {result_str}  {icon}")
 
     print("=" * 52)
-    print(f"[+] Full log saved: {output_path}")
-    print(f"[+] Saved {len(results)} attempts to {os.path.basename(output_path)}")
+    print(_safe_for_console(f"[+] Full log saved: {output_path}"))
+    print(_safe_for_console(f"[+] Saved {len(results)} attempts to {os.path.basename(output_path)}"))

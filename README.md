@@ -50,23 +50,95 @@ Expensive methods (XOR brute force, Vigenere, substitution solvers) now run in p
 Structural fingerprinting detects JWT, PEM, compressed data, and file formats before brute-forcing, prioritizing the most likely methods.
 
 ### Multi-language Support
-Scoring now works with English, Spanish, and Hebrew text, with n-gram frequency tables for each language.
+Scoring uses offline frequency data for many languages. Real-word frequency is
+looked up with the [`wordfreq`](https://github.com/rspeer/wordfreq) library
+(bundled frequency tables — no network calls), tried across a curated set of
+languages (English, Spanish, Hebrew, German, French, and more). For a general
+"does this look like structured human text vs. random noise" signal, a
+self-trained, offline 2-character **Markov naturalness model** is used — built
+once from `wordlists/corpus_en.txt` and persisted to
+`wordlists/markov_model.json`, so it is never retrained at runtime. See
+*Confidence Scoring* below for how these combine.
 
 ## Confidence Scoring
 
-Each decoded result is scored from 0 to 100:
+Each decoded result is scored from 0 to 100 using a **normalized weighted
+model**. This replaced an earlier additive point table that *saturated at 100*
+on weak multi-signal matches — letting multi-layer gibberish chains tie and
+outrank clean single-layer decodes (see the regression test in
+`tests/test_scoring.py`). Every signal is a normalized value in `[0.0, 1.0]`
+and they are combined by a fixed weighted formula, so weak signals can no
+longer stack to the cap.
 
-| Signal | Points |
-|---|---|
-| Output is mostly printable ASCII | +30 |
-| Matches a CTF flag pattern like `flag{...}` or `CTF{...}` | +25 |
-| Contains common words (English/Spanish/Hebrew) | +20 |
-| Output entropy is lower than input entropy | +15 |
-| Output is non-empty and different from the input | +10 |
-| Good n-gram frequency score | +10 |
-| Possible substitution cipher pattern | +10 |
+### The formula
+
+```
+if strong_structural_match:                 # dominant signal, short-circuits
+    base = 0.90 + 0.10 * ascii_ratio
+else:
+    base = 0.30 * ascii_ratio
+         + 0.25 * language_score
+         + 0.20 * entropy_drop
+         + 0.15 * diff_from_input
+         + 0.10 * weak_pattern_bonus
+
+decay = 0.85 ** max(0, pipeline_depth - 1)  # no penalty at depth 1
+score = round(base * decay * 100, 1)
+```
+
+### Signals (all normalized 0.0–1.0)
+
+| Signal | What it measures | Weight |
+|---|---|---|
+| `strong_structural_match` | A *genuinely valid* domain (labels + known TLD), JWT, PEM block, or recognized file magic bytes. Set only by precise structural detectors — never loose substring heuristics. | dominant (short-circuits to ~0.90–1.00 base) |
+| `ascii_ratio` | Fraction of printable ASCII characters | 0.30 |
+| `language_score` | `max(wordfreq lexical score, Markov naturalness)` — real-word frequency across languages, or natural-character-transition statistics | 0.25 |
+| `entropy_drop` | How much Shannon entropy dropped vs. the input | 0.20 |
+| `diff_from_input` | How unlike the input the decoded result is | 0.15 |
+| `weak_pattern_bonus` | Capped bonus from lightweight patterns: CTF flag template, JSON/HTML shape | 0.10 |
+
+### Pipeline-depth decay
+
+A single-layer decode (depth 1) gets **no penalty**. Each additional decode
+layer multiplies the score by **0.85**, so a clean one-layer valid-domain
+result scores 100 while the same shape produced by a 2-layer chain scores 85, a
+3-layer chain 72.25, and so on. This makes deep chains increasingly skeptical
+rather than giving them a free pass — the fix that stops
+`dvorak → qwerty → caesar` gibberish from tying a real decode.
+
+### Language signal details
+
+* **wordfreq** — fraction of alphabetic tokens (length ≥ 3) that are frequent
+  words in *some* supported language; tokens of length 2 are excluded because
+  almost every 2-letter string is a real word *somewhere* across wordfreq's ~40
+  languages, which made short gibberish look plausible. Per-token lookups are
+  memoized and English (and a few primary languages) are tried first; the full
+  language sweep only runs when no primary language already explains the
+  tokens. This keeps a full run fast.
+* **Markov naturalness** — a 2-character transition model trained once from
+  `wordlists/corpus_en.txt` and stored at `wordlists/markov_model.json`. The
+  scorer computes an average per-character log-probability and squashes it
+  through a logistic curve into 0–1, so real English prose lands ~0.4–0.6 and
+  random symbols/letters collapse toward 0.
+* The two combine via **max**: a candidate that is plausibly human text in
+  *either* sense (real words or natural bigram statistics) scores well; a domain
+  like `goramli.bsmch.idf.il` (valid but not dictionary words) is correctly low
+  on this signal and relies on the structural detector instead.
+
+Both signals run fully offline — `wordfreq` ships its data bundled and the
+Markov model is trained locally. No code path in the scorer or detector makes a
+network request.
 
 Results identical to the input are discarded automatically.
+
+### Reproducing / regressing the scoring model
+
+`tests/test_scoring.py` pins the bug report this overhaul fixed: the clean
+single-layer domain decode `goramli.bsmch.idf.il` must outrank (and by a wide
+margin) the multi-layer Dvorak→QWERTY→Caesar gibberish that previously tied it
+at 100/100. It also asserts the domain regex rejects punctuation-heavy
+gibberish and accepts fully valid multi-label domains. Run with
+`py tests/test_scoring.py` (no pytest required) or `pytest`.
 
 ## Categories for --only
 
@@ -115,7 +187,7 @@ The log file shows the full method chain for each result. The `--max-depth` flag
 - Hill Cipher: try common 2x2 matrices with determinant coprime to 26.
 - Enigma: the tool tries common historical configurations (Wehrmacht M3).
 - Running Key: uses text from `wordlists/running_key_sources.txt`.
-- Simple substitution: the solver works without a wordlist using n-gram statistics.
+- Simple substitution: the solver works without a wordlist using the offline Markov naturalness model as its fitness function (hill-climbing + genetic algorithm).
 - Multi-byte XOR: uses Kasiski examination and frequency analysis to find key length.
 - Known-plaintext XOR: detects file magic bytes (PNG, ZIP, PDF, etc.) and derives keys.
 
@@ -137,9 +209,14 @@ methods/
   hash_detect.py            Hash type identification
   substitution_ciphers.py   Simple substitution solver, Caesar brute force
 utils/
-  scorer.py                 confidence scoring with multi-language support
-  detector.py               structural fingerprinting and encoding detection
+  scorer.py                 normalized weighted confidence scoring (wordfreq + Markov)
+  detector.py               structural fingerprinting + valid domain/JWT/PEM/magic detection
+  markov_language.py        offline 2-char Markov naturalness model (trained + persisted)
   reporter.py               TXT log writer and terminal output
 wordlists/
   running_key_sources.txt   texts used for Running Key cipher
+  corpus_en.txt             English corpus the Markov model is trained from
+  markov_model.json         persisted trained Markov model (built on first use)
+tests/
+  test_scoring.py           regression tests for the scoring + structural detection
 ```
